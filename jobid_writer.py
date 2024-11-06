@@ -16,7 +16,7 @@ n_it = int(io_args.iteration_no)
 job_id = io_args.job_id
 job_name = io_args.job_name
 
-if n_it!=-1:   # creating the job directory
+if n_it!=-1:   # creating the job directory (iteration directory)
    try:
       os.mkdir(file_path+'/'+protein+'/iteration_'+str(n_it))
    except OSError: # file already exists
