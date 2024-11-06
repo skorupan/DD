@@ -1,3 +1,4 @@
+# Phase IV: Model training
 #!/bin/bash
 #SBATCH --cpus-per-task=3
 #SBATCH --ntasks=1
