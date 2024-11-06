@@ -1,3 +1,4 @@
+# Phase III: Molecular docking
 #!/bin/bash
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=normal
