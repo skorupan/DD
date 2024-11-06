@@ -1,3 +1,4 @@
+# Phase II: ligand preparation (run OEOMEGA -classic)
 #!/bin/bash
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=normal
