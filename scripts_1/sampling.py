@@ -44,27 +44,29 @@ print(" - Data Directory:", data_directory)
 print(" - Training Size:", tr_sz)
 print(" - Validation Size:", vl_sz)
 
-
+# Define function that creates train, validation, and test sets from data
 def train_valid_test(file_name):
     sampling_start_time = time.time()
     f_name = file_name.split('/')[-1]
     mol_ct = pd.read_csv(data_directory+"/Mol_ct_file_updated_%s.csv"%protein, index_col=1)
-    if n_it == 1:
-        to_sample = int(mol_ct.loc[f_name].Sample_for_million/(rt_sz+2))
+    if n_it == 1: # If this is the first iteration
+        to_sample = int(mol_ct.loc[f_name].Sample_for_million/(rt_sz+2)) # Adjust sample size based on ratios
     else:
-        to_sample = int(mol_ct.loc[f_name].Sample_for_million/3)
+        to_sample = int(mol_ct.loc[f_name].Sample_for_million/3) # Sample evenly for train, valid, and test
 
+    # Creates a randomized list of indices to split molecules in a file into training, validation, and test sets.
     total_len = int(mol_ct.loc[f_name].Number_of_Molecules)
-    shuffle_array = np.linspace(0, total_len-1, total_len)
+    shuffle_array = np.linspace(0, total_len-1, total_len) # Create an array of indices for shuffling
     seed = np.random.randint(0, 2**32)
     np.random.seed(seed=seed)
-    np.random.shuffle(shuffle_array)
+    np.random.shuffle(shuffle_array) # Shuffle indices to randomize data
 
-    if n_it == 1:
+    # Select indices for training, validation, and test sets based on iteration number
+    if n_it == 1: # Splits based on ratio needed for training vs validation/test (samples first then splits); ex: ratio = 4, train=400k, valid=100k (from 400k to 500k), test=100k (from 500k to 600k)
         train_ind = shuffle_array[:int(rt_sz*to_sample)]
         valid_ind = shuffle_array[int(to_sample*rt_sz):int(to_sample*(rt_sz+1))]
         test_ind = shuffle_array[int(to_sample*(rt_sz+1)):int(to_sample*(rt_sz+2))]
-    else:
+    else: # Splits it into equal subsets for subsequest iterations (training augmentation)
         train_ind = shuffle_array[:to_sample]
         valid_ind = shuffle_array[to_sample:to_sample*2]
         test_ind = shuffle_array[to_sample*2:to_sample*3]
