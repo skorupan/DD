@@ -1,3 +1,4 @@
+# Refer to extracting_morgan.py for commentary (smiles extraction for molecular docking)
 from multiprocessing import Pool
 from functools import partial
 from contextlib import closing
