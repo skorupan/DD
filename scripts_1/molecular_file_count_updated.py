@@ -37,14 +37,14 @@ print(" - Iteration:", n_it)
 print(" - Data Directory:", data_directory)
 print(" - Sampling Size:", tot_sampling)
 
-
+# Define function to write molecule count for each file to specified file
 def write_mol_count_list(file_name,mol_count_list):
     with open(file_name,'w') as ref:
         for ct,file_name in mol_count_list:
             ref.write(str(ct)+","+file_name.split('/')[-1])
             ref.write("\n")
 
-
+# Define function to count the molecules in each file by counting lines (skipping header)
 def molecule_count(file_name):
     temp = 0
     with open(file_name,'r') as ref:
@@ -63,16 +63,19 @@ if __name__=='__main__':
     t=time.time()
     print("Reading Files...")
     with closing(Pool(np.min([tot_process,len(files)]))) as pool:
-        rt = pool.map(molecule_count,files)
+        rt = pool.map(molecule_count,files) # Map molecule_count function to all files in parallel
     print("Done Reading Finals - Time Taken", time.time()-t)
 
     print("Saving File Count...")
     write_mol_count_list(data_directory+'/Mol_ct_file_%s.csv'%protein,rt)
+    # Read the newly created file with molecule counts into a pandas DataFrame
     mol_ct = pd.read_csv(data_directory+'/Mol_ct_file_%s.csv'%protein,header=None)
-    mol_ct.columns = ['Number_of_Molecules','file_name']
+    mol_ct.columns = ['Number_of_Molecules','file_name'] # Assign column names to DataFrame
+    # Calculate the sampling size and total molecules available
     Total_sampling = tot_sampling
     Total_mols_available = np.sum(mol_ct.Number_of_Molecules)
+    # Compute samples per million molecules (find total ratio and multiply by the number of molecules in that file - contribution proportion) and store in DataFrame
     mol_ct['Sample_for_million'] = [int(Total_sampling/Total_mols_available*elem) for elem in mol_ct.Number_of_Molecules]
     mol_ct.to_csv(data_directory+'/Mol_ct_file_updated_%s.csv'%protein,sep=',',index=False)
     print("Done - Time Taken", time.time()-t)
-
+    
