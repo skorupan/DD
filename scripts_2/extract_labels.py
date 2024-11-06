@@ -30,28 +30,30 @@ key_word = str(io_args.score_keyword)
 # mol_key = 'ZINC'
 print("Keyword: ", key_word)
 
-
+# Function to extract docking scores (labels) from each molecule in the file
 def get_scores(ref):
     scores = []
     for line in ref:  # Looping through the molecules
-        zinc_id = line.rstrip()
+        zinc_id = line.rstrip() # Store the molecule's unique ID. *Note: zinc_id represents molecule ID
         line = ref.readline()
         # '$$$' signifies end of molecule info
         while line != '' and line[:4] != '$$$$':  # Looping through its information and saving scores
 
-            tmp = line.rstrip().split('<')[-1]
+            tmp = line.rstrip().split('<')[-1] # Extract the keyword field name
 
             if key_word == tmp[:-1]:
                 tmpp = float(ref.readline().rstrip())
+                # Check if the score is within a reasonable range, otherwise print it for debugging
                 if tmpp > 50 or tmpp < -50:
-                    print(zinc_id, tmpp)
+                if tmpp > 50 or tmpp < -50:
+                    print(zinc_id, tmpp) # Append the score and ID to the list
                 else:
                     scores.append([zinc_id, tmpp])
 
             line = ref.readline()
     return scores
 
-
+# Function to extract scores from a compressed docking file
 def extract_glide_score(filen):
     scores = []
     try:
@@ -65,6 +67,7 @@ def extract_glide_score(filen):
         with open(filen, 'r') as ref:
             scores = get_scores(ref)
 
+    # Determine the dataset type (training, testing, or validation) based on the filename
     if 'test' in os.path.basename(filen):
         new_name = 'testing'
     elif 'valid' in os.path.basename(filen):
@@ -74,7 +77,8 @@ def extract_glide_score(filen):
     else:
         print("Could not generate new training set")
         exit()
-
+        
+    # Write the extracted scores to a labeled output file
     with open(file_path + '/' + protein + '/iteration_' + str(n_it) + '/' + new_name + '_' + 'labels.txt', 'w') as ref:
         ref.write('r_i_docking_score' + ',' + 'ZINC_ID' + '\n')
         for z_id, gc in scores:
@@ -82,7 +86,7 @@ def extract_glide_score(filen):
 
 
 if __name__ == '__main__':
-    files = []
+    files = []  # List to hold paths of all docking files
     iter_path = file_path + '/' + protein + '/iteration_' + str(n_it)
 
     # Checking to see if the labels have already been extracted:
@@ -106,10 +110,12 @@ if __name__ == '__main__':
         print('Labels have already been extracted...')
         print('Remove "_labels.text" files in \"' + iter_path + '\" to re-extract')
         exit(0)
-
+        
+    # Glob pattern to find all docking result files in the current iteration directory
     path = iter_path + '/docked/*.sdf*'
     path_labels = iter_path + '/*labels*'
 
+    # Append each file found to the list of files
     for f in glob.glob(path):
         files.append(f)
 
