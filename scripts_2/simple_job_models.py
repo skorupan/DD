@@ -79,18 +79,19 @@ if SAVE_PATH is None: SAVE_PATH = DATA_PATH
 # sums the first column and divides it by 1 million (this is our total database size)
 t_mol = pd.read_csv(mdd+'/Mol_ct_file_%s.csv'%protein,header=None)[[0]].sum()[0]/1000000 # num of compounds in each file is mol_ct_file
 
+# Intial values for training hyperparameters 
 cummulative = 0.25*n_it
 dropout = [0.2, 0.5]
 learn_rate = [0.0001]
 bin_array = [2, 3]
 wt = [2, 3]
 if nhp < 144:
-   bs = [256]
+   bs = [256] # Batch size: number samples processed before updating model's parameters during training 
 else:
     bs = [128, 256]
     
 if nhp < 48:
-    oss = [10]
+    oss = [10] #  Over-sample size: number of samples/over-sample size used to augment the training data for handling class imbalance. Adjusted based on nhp. 
 elif nhp < 72:
     oss = [5, 10]
 else:
@@ -118,6 +119,8 @@ with open(DATA_PATH+'/iteration_'+str(1)+'/validation_labels.txt','r') as ref:
 
 scores_val = np.array(scores_val)
 
+# Calculate  number of top-scoring molecules for current and last iteration
+
 first_mols = int(100*t_mol/13) if percent_first_mols == -1.0 else int(percent_first_mols * len(scores_val))
 
 print(first_mols)
@@ -126,6 +129,7 @@ last_mols = 100 if percent_last_mols == -1.0 else int(percent_last_mols * len(sc
 
 print(last_mols)
 
+# Determine the number of molecules to save at the end of this iteration
 if n_it==1:
     # 'good_mol' is the number of top scoring molecules to save at the end of the iteration
     good_mol = first_mols
@@ -143,6 +147,7 @@ print(isl)
 if isl == 'True':
     good_mol = 100 if percent_last_mols == -1.0 else int(percent_last_mols * len(scores_val))
 
+# Set initial threshold for cutoff value based on average docking score
 cf_start = np.mean(scores_val)  # the mean of all the docking scores (labels) of the validation set:
 t_good = len(scores_val)
 
@@ -156,6 +161,7 @@ print('Molec under threshold:', t_good)
 print('Goal molec:', good_mol)
 print('Total molec:', len(scores_val))
 
+# Generate all possible combinations of hyperparameters
 all_hyperparas = []
 
 for o in oss:   # Over Sample Size
