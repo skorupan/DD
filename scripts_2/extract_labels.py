@@ -1,3 +1,4 @@
+# Docking scores for each molecular set are saved to a corresponding txt file inside iteration_1. The number of processes should match the number of docking sdf files (three). The score_keyword argument must match the title of the field that stores the docking score of a molecule in the sdf files.
 import argparse
 import builtins as __builtin__
 import glob
