@@ -79,7 +79,7 @@ print(nu,df,lr,ba,wt,cf,bs,oss,DATA_PATH)
 if TRAINING_SIZE == -1: print("Training size not specified, using entire dataset...")
 print("Finished parsing args...")
 
-
+# Function to process and encode molecules in SMILES format
 def encode_smiles(series):
     print("Encoding smiles")
     # parameter is a pd.series with ZINC_IDs as the indicies and smiles as the elements
@@ -88,7 +88,7 @@ def encode_smiles(series):
     # returns a dict array of the smiles.
     return encoded_dict
 
-
+# Function for oversampling SMILES data: duplicates SMILES-encoded arrays according to counts in oversampled_zid. 
 def get_oversampled_smiles(Oversampled_zid, smiles_series):
     # Must return a dictionary where the keys are the zids and the items are
     # numpy ndarrys with n numbers of the same encoded smile
@@ -101,7 +101,7 @@ def get_oversampled_smiles(Oversampled_zid, smiles_series):
         oversampled_smiles[key] = np.repeat([smile], Oversampled_zid[key], axis=0)
     return oversampled_smiles
 
-
+# Function for oversampling Morgan fingerprints data: duplicates Morgan fingerprints-encoded arrays according to counts in oversampled_zid. 
 def get_oversampled_morgan(Oversampled_zid, fname):
     print('x data from:', fname)
     # Gets only the morgan fingerprints of those randomly selected zinc ids
@@ -153,14 +153,17 @@ def get_morgan_and_scores(morgan_path, ID_labels):
     print(ID_labels.columns)
     score_col = ID_labels.columns.difference(['ZINC_ID'])[0]
     print(score_col)
-
+    
+    # Merge the ID_labels with the fingerprint data using 'ZINC_ID' as the key
     train_data = pd.merge(ID_labels, train_pd, how='inner',on=['ZINC_ID'])
-    X_train = train_data[train_data.columns.difference(['ZINC_ID', score_col])].values   # input
+    
+    # Separate features (X_train) and labels (y_train)
+    X_train = train_data[train_data.columns.difference(['ZINC_ID', score_col])].values   # input/features
     y_train = train_data[[score_col]].values    # labels
     return X_train, y_train
 
 
-# Gets the labels data
+# Function to get the labels data
 def get_data(smiles_path, morgan_path, labels_path):
     # Loading the docking scores (with corresponding Zinc_IDs)
     labels = pd.read_csv(labels_path, sep=',', header=0)
@@ -175,32 +178,33 @@ def get_data(smiles_path, morgan_path, labels_path):
     data.set_index('ZINC_ID', inplace=True)
     return data
 
-
+# Set the current iteration number
 n_iteration = n_it
 total_mols = t_mol
 
 try:
+    # Create directories to save models for the current iteration if they don't already exist
     os.mkdir(SAVE_PATH + '/iteration_'+str(n_iteration)+'/all_models')
 except OSError:
-    pass
+    pass # Set the current iteration number
 
 
-# Getting data from prev iterations and this iteration
+# Initialize empty DataFrames to hold data from previous iterations and for train, test, and validation sets
 data_from_prev = pd.DataFrame()
 train_data = pd.DataFrame()
 test_data = pd.DataFrame()
 valid_data = pd.DataFrame()
 y_valid_first = pd.DataFrame()
 y_test_first = pd.DataFrame()
+# Loop through each iteration up to the current one
 for i in range(1, n_iteration+1):
-
-    # getting all the data
+    # Define file paths for SMILES, Morgan fingerprints, and labels for each data split (train, test, valid)
     print("\nGetting data from iteration", i)
     smiles_path = DATA_PATH + '/iteration_'+str(i)+'/smile/{}_smiles_final_updated.smi'
     morgan_path = DATA_PATH + '/iteration_'+str(i)+'/morgan/{}_morgan_1024_updated.csv'
     labels_path = DATA_PATH + '/iteration_'+str(i)+'/{}_labels.txt'
 
-    # Resulting dataframe will have cols of smiles (if selected) and docking scores with an index of Zinc IDs
+    # Resulting dataframe will have cols of smiles (if selected) and docking scores with an index of Zinc IDs ; Load training, test, and validation data for this iteration
     train_data = get_data(smiles_path.format('train'), morgan_path.format('train'), labels_path.format('training'))
     test_data = get_data(smiles_path.format('test'), morgan_path.format('test'), labels_path.format('testing'))
     valid_data = get_data(smiles_path.format('valid'), morgan_path.format('valid'), labels_path.format('validation'))
