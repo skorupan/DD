@@ -24,18 +24,18 @@ from ML.DDCallbacks import DDLogger
 START_TIME = time.time()
 print("Parsing args...")
 parser = argparse.ArgumentParser()
-parser.add_argument('-num_units','--nu',required=True)
-parser.add_argument('-dropout','--df',required=True)
-parser.add_argument('-learn_rate','--lr',required=True)
-parser.add_argument('-bin_array','--ba',required=True)
-parser.add_argument('-wt','--wt',required=True)
-parser.add_argument('-cf','--cf',required=True)
-parser.add_argument('-rec','--rec',required=True)
-parser.add_argument('-n_it','--n_it',required=True)
-parser.add_argument('-t_mol','--t_mol',required=True)
-parser.add_argument('-bs','--bs',required=True)
-parser.add_argument('-os','--os',required=True)
-parser.add_argument('-d_path','--data_path',required=True)  # new!
+parser.add_argument('-num_units','--nu',required=True) # Number of units
+parser.add_argument('-dropout','--df',required=True) # Dropout rate
+parser.add_argument('-learn_rate','--lr',required=True) # Learning rate
+parser.add_argument('-bin_array','--ba',required=True) # Binary array
+parser.add_argument('-wt','--wt',required=True) # Weighting parameter
+parser.add_argument('-cf','--cf',required=True) # Cost function
+parser.add_argument('-rec','--rec',required=True) # Regularization parameter
+parser.add_argument('-n_it','--n_it',required=True) # Number of iterations
+parser.add_argument('-t_mol','--t_mol',required=True) # Threshold for molecules
+parser.add_argument('-bs','--bs',required=True) # Batch size
+parser.add_argument('-os','--os',required=True) # Oversampling factor
+parser.add_argument('-d_path','--data_path',required=True)  # Data path
 
 # adding parameter for where to save all the data to:
 parser.add_argument('-s_path', '--save_path', required=False, default=None)
@@ -51,6 +51,7 @@ io_args = parser.parse_args()
 
 print(sys.argv)
 
+# Converting command-line arguments to respective data types
 nu = int(io_args.nu)
 df = float(io_args.df)
 lr = float(io_args.lr)
@@ -63,18 +64,20 @@ bs = int(io_args.bs)
 oss = int(io_args.os)
 t_mol = float(io_args.t_mol)
 
+# Setting various flags and configurations based on parsed arguments
 CONTINUOUS = io_args.continuous
 NORMALIZE = io_args.normalization
 SMILES = io_args.smiles
 TRAINING_SIZE = int(io_args.train_num_mol)
 num_molec = int(io_args.number_mol)
 
+# Defining data and save paths
 DATA_PATH = io_args.data_path   # Now == file_path/protein
 SAVE_PATH = io_args.save_path
 # if no save path is provided we just save it in the same location as the data
 if SAVE_PATH is None: SAVE_PATH = DATA_PATH
 
-
+# Print model configuration for verification
 print(nu,df,lr,ba,wt,cf,bs,oss,DATA_PATH)
 if TRAINING_SIZE == -1: print("Training size not specified, using entire dataset...")
 print("Finished parsing args...")
@@ -83,7 +86,7 @@ print("Finished parsing args...")
 def encode_smiles(series):
     print("Encoding smiles")
     # parameter is a pd.series with ZINC_IDs as the indicies and smiles as the elements
-    encoded_smiles = DDModel.process_smiles(series.values, 100, fit_range=100, use_padding=True, normalize=True)
+    encoded_smiles = DDModel.process_smiles(series.values, 100, fit_range=100, use_padding=True, normalize=True) # Encode SMILES strings as fixed-length, padded, and normalized arrays for model input
     encoded_dict = dict(zip(series.keys(), encoded_smiles))
     # returns a dict array of the smiles.
     return encoded_dict
@@ -91,14 +94,14 @@ def encode_smiles(series):
 # Function for oversampling SMILES data: duplicates SMILES-encoded arrays according to counts in oversampled_zid. 
 def get_oversampled_smiles(Oversampled_zid, smiles_series):
     # Must return a dictionary where the keys are the zids and the items are
-    # numpy ndarrys with n numbers of the same encoded smile
+    # numpy ndarrays with n numbers of the same encoded smile
     # the n comes from the number of times that particular zid was chosen at random. 
     oversampled_smiles = {}
     encoded_smiles = encode_smiles(smiles_series)
     
     for key in Oversampled_zid.keys():
         smile = encoded_smiles[key]
-        oversampled_smiles[key] = np.repeat([smile], Oversampled_zid[key], axis=0)
+        oversampled_smiles[key] = np.repeat([smile], Oversampled_zid[key], axis=0) # Reuses randomly selected SMILES to generate more training data of a particular class (oversampling)
     return oversampled_smiles
 
 # Function for oversampling Morgan fingerprints data: duplicates Morgan fingerprints-encoded arrays according to counts in oversampled_zid. 
@@ -130,9 +133,11 @@ def get_morgan_and_scores(morgan_path, ID_labels):
     with open(morgan_path,'r') as ref:
         line_no=0
         for line in ref:
+            # Stop reading if we've processed the specified number of molecules
             if line_no >= num_molec:
                 break
-
+            
+            # Split line into molecule ID and fingerprint bit indices
             mol_info=line.rstrip().split(',')
             train_id.append(mol_info[0])
             
@@ -142,13 +147,16 @@ def get_morgan_and_scores(morgan_path, ID_labels):
                 train_set[line_no,int(elem)] = 1
 
             line_no+=1
-    
+            
+    # Trim `train_set` to include only the lines read
     train_set = train_set[:line_no,:]
 
     print('Done...')
+    # Convert `train_set` to a DataFrame and add ZINC_IDs
     train_pd = pd.DataFrame(data=train_set, dtype=np.bool)
     train_pd['ZINC_ID'] = train_id
 
+    # Convert ID_labels to a DataFrame and locate the score column
     ID_labels = ID_labels.to_frame()
     print(ID_labels.columns)
     score_col = ID_labels.columns.difference(['ZINC_ID'])[0]
@@ -170,9 +178,11 @@ def get_data(smiles_path, morgan_path, labels_path):
 
     # Merging and setting index to the ID if smiles flag is set
     if SMILES:
+        # Load SMILES data and merge with labels on 'ZINC_ID'
         smiles = pd.read_csv(smiles_path, sep=' ', names=['smile', 'ZINC_ID'])
         data = smiles.merge(labels, on='ZINC_ID')
     else:
+        # Load ZINC_IDs only from Morgan data and merge with labels
         morgan = pd.read_csv(morgan_path, usecols=[0], header=None, names=['ZINC_ID']) # reading in only the zinc ids
         data = morgan.merge(labels, on='ZINC_ID')
     data.set_index('ZINC_ID', inplace=True)
@@ -238,26 +248,26 @@ elif (n_iteration == 1) and (TRAINING_SIZE != -1):
 
 print("Training labels shape: ", train_data.shape)
 
-# Exiting if there are not enough hits
+# Exiting if there are not enough hits (in validation or test sets)
 if (y_valid_first.r_i_docking_score < cf).values.sum() <= 10 or \
         (y_test_first.r_i_docking_score < cf).values.sum() <= 10:
     print("There are not enough hits... exiting.")
     sys.exit()
 
-
-if CONTINUOUS:
+# Continuous determines whether the model is regression or classification, and normalize scales the labels 
+if CONTINUOUS: # Flag determines whether docking scores (labels) should be treated as continuous numerical values or binary (T/F) labels: model will use actual numerica valies as input (continuous) 
     print('Using continuous labels...')
     y_valid = valid_data.r_i_docking_score
     y_test = test_data.r_i_docking_score
     y_train = train_data.r_i_docking_score
 
-    if NORMALIZE:
+    if NORMALIZE: # Flag determines whether the continuous docking scores (labels) should be normalized
         print('Adding cutoff to be normalized')
         cutoff_ser = pd.Series([cf], index=['cutoff'])
         y_train = y_train.append(cutoff_ser)
 
         print("Normalizing docking scores...")
-        # Normalize the docking scores
+        # Normalize the docking scores: cutoff score (cf) is added to the labels to scale 
         y_valid = DDModel.normalize(y_valid)
         y_test = DDModel.normalize(y_test)
         y_train = DDModel.normalize(y_train)
