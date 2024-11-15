@@ -302,16 +302,21 @@ y_neg = y_neg.to_dict()
 num_neg = len(y_neg)
 num_pos = len(y_pos)
 
-sample_size = np.min([num_neg, num_pos*oss])
+sample_size = np.min([num_neg, num_pos*oss]) # Determine the sample size for oversampling 
 
+# Display information about oversampling
 print("\nOversampling...", "size:", sample_size)
 print("\tNum pos: {} \n\tNum neg: {}".format(num_pos, num_neg))
+
+# Initialize dictionaries to track oversampled ZINC IDs and their corresponding labels
 Oversampled_zid = {}    # Keeps track of how many times that zinc_id is randomly selected
 Oversampled_zid_y = {}
 
+# Convert positive and negative label keys to lists for random access
 pos_keys = list(y_pos.keys())
 neg_keys = list(y_neg.keys())
 
+# Performing oversampling 
 for i in range(sample_size):
     # Randomly sampling equal number of hits and misses:
     idx = random.randint(0, num_pos-1)
@@ -319,7 +324,7 @@ for i in range(sample_size):
     pos_zid = pos_keys[idx]
     neg_zid = neg_keys[idx_neg]
 
-    # Adding both pos and neg to the dictionary
+    # Adding both positive and negative to the dictionary
     try:
         Oversampled_zid[pos_zid] += 1
     except KeyError:
@@ -364,10 +369,13 @@ else:
 
 print("y validation shape:", y_valid.shape)
 
+# Initialize arrays for training data
 ct = 0
 Oversampled_y_train = np.zeros([sample_size*2, 1])
 print("oversampled sample:", list(Oversampled_zid.items())[0])
 num_morgan_missing = 0
+
+# Populate training data with oversampled fingerprints and labels
 for key in Oversampled_zid.keys():
     try:
         tt = len(Oversampled_zid[key])
@@ -377,12 +385,14 @@ for key in Oversampled_zid.keys():
         num_morgan_missing += 1
         continue    # Skipping data that has no labels for it
 
+    # Assign oversampled fingerprints and labels
     Oversampled_X_train[ct:ct+tt] = Oversampled_zid[key]  # repeating the same data for as many times as it was selected
     Oversampled_y_train[ct:ct+tt] = Oversampled_zid_y[key]
     ct += tt
 
 print("Done oversampling, number of missing morgan fingerprints:", num_morgan_missing)
 
+# Callback to stop training after a specified time
 class TimedStopping(Callback):
     '''
     Stop training when enough time has passed.
@@ -408,7 +418,6 @@ class TimedStopping(Callback):
                 print('Stopping after %s seconds.' % self.seconds)
 
 #FREE MEMORY
-
 del data_from_prev
 del y_neg
 del neg_keys
@@ -430,13 +439,22 @@ gc.collect()
 print("Data prep time:", time.time() - START_TIME)
 print("Configuring model...")
 
-# This is our new model 
-hyperparameters = {"bin_array": ba*[0,1], "dropout_rate": df, "learning_rate": lr,
-                   "num_units": nu, "batch_size": bs, "class_weight": wt, "epsilon": 1e-06}
+# MODEL 
+hyperparameters = {
+    "bin_array": ba * [0, 1],  # Binary array for processing input features
+    "dropout_rate": df,        # Dropout rate for regularization
+    "learning_rate": lr,       # Learning rate for the optimizer
+    "num_units": nu,           # Number of units in hidden layers
+    "batch_size": bs,          # Batch size for training
+    "class_weight": wt,        # Class weight for handling imbalanced datasets
+    "epsilon": 1e-06           # Small constant to prevent division by zero
+}
+
+# Display training data and hyperparameters for verification
 print("\n"+"-"*20)
 print("Training data info:" + "\n")
-print("X Data Shape[1:]", Oversampled_X_train.shape[1:])
-print("X Data Shape", Oversampled_X_train.shape)
+print("X Data Shape[1:]", Oversampled_X_train.shape[1:]) # Input shape of the training data
+print("X Data Shape", Oversampled_X_train.shape) # Full shape of the training data
 print("X Data example", Oversampled_X_train[0])
 print("Hyperparameters", hyperparameters)
 
@@ -445,38 +463,43 @@ if False:
     # progressive_docking = optimize(technique='bayesian')
     pass
 else:
+    # Define metrics and create the model using a custom class
     from ML.DDMetrics import *
     metrics = ['accuracy', tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     progressive_docking = DDModel(mode='original',
                                   input_shape=Oversampled_X_train.shape[1:],
                                   hyperparameters=hyperparameters,
                                   metrics=metrics)
+# Display a summary of the model architecture
 progressive_docking.model.summary()
 
-# keeping track of what model number this currently is and saving
+# Keeping track of what model number this currently is and saving
 try:
     with open(SAVE_PATH + '/iteration_'+str(n_iteration)+'/model_no.txt', 'r') as ref:
         mn = int(ref.readline().rstrip())+1
     with open(SAVE_PATH + '/iteration_'+str(n_iteration)+'/model_no.txt', 'w') as ref:
         ref.write(str(mn))
 
-except IOError:  # file doesnt exist yet
+except IOError:  # File doesnt exist yet
     mn = 1
     with open(SAVE_PATH + '/iteration_'+str(n_iteration)+'/model_no.txt', 'w') as ref:
         ref.write(str(mn))
 
+# Define training parameters
 num_epochs = 500
-cw = {0:wt, 1:1}
-es = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=0, mode='auto')
-es1 = TimedStopping(seconds=36000)   # stop training after 10 hours
+cw = {0:wt, 1:1}  # Class weights for handling imbalanced data
+es = EarlyStopping(monitor='val_loss', min_delta=0, patience=10, verbose=0, mode='auto') # Early stopping based on validation loss
+es1 = TimedStopping(seconds=36000)   # Stop training after 10 hours
 logger = DDLogger(
     log_path=SAVE_PATH + "/iteration_" + str(n_iteration) + "/all_models/model_{}_train_log.csv".format(str(mn)),
     max_time=36000,
     max_epochs=num_epochs,
-    monitoring='val_loss'
+    monitoring='val_loss' # Log validation loss during training
 )
+# Measure training time 
 delta_time = time.time()
 
+# Save the model to specified path 
 try:
     print(SAVE_PATH + '/iteration_'+str(n_iteration)+'/all_models/model_'+str(mn))
     progressive_docking.save(SAVE_PATH + '/iteration_'+str(n_iteration)+'/all_models/model_'+str(mn))
@@ -484,6 +507,7 @@ except FailedPreconditionError as e:
     print("Error occurred while saving:")
     print(" -", e)
 
+# Train the model
 progressive_docking.fit(Oversampled_X_train,
                         Oversampled_y_train,
                         epochs=num_epochs,
@@ -498,15 +522,18 @@ progressive_docking.fit(Oversampled_X_train,
 delta_time = time.time()-delta_time
 print("Training Time:", delta_time)
 
+# Save the trained model
 print("Saving the model...")
 progressive_docking.save(SAVE_PATH + '/iteration_'+str(n_iteration)+'/all_models/model_'+str(mn))
 
+# Generate predictions on validation and testing datasets
 print('Predicting on validation data')
 prediction_valid = progressive_docking.predict(X_valid)
 
 print('Predicting on testing data')
 prediction_test = progressive_docking.predict(X_test)
 
+# Continuous predictions are converted to binary for evaluation 
 if CONTINUOUS:
     # Converting back to binary values to get stats
     y_valid = y_valid < cf_to_use
@@ -514,6 +541,7 @@ if CONTINUOUS:
     y_test = y_test < cf_to_use
     prediction_test = prediction_test < cf_to_use
 
+# Calculate metrics and statistics for validation
 print('Getting stats from predictions...')
 # Getting stats for validation
 precision_vl, recall_vl, thresholds_vl = precision_recall_curve(y_valid, prediction_valid)
@@ -524,7 +552,7 @@ pos_ct_orig = np.sum(y_valid)
 Total_left = rec*pos_ct_orig/pr_vl*total_mols*1000000/len(y_valid)
 tr = thresholds_vl[np.where(recall_vl>rec)[0][-1]]
 
-# Getting stats for testing
+# Calculate metrics and statistics for testing
 precision_te, recall_te, thresholds_te = precision_recall_curve(y_test,prediction_test)
 fpr_te, tpr_te, thresh_te = roc_curve(y_test, prediction_test)
 auc_te = auc(fpr_te,tpr_te)
@@ -533,7 +561,7 @@ re_te = recall_te[np.where(thresholds_te>tr)[0][0]]
 pos_ct_orig = np.sum(y_test)
 Total_left_te = re_te*pos_ct_orig/pr_te*total_mols*1000000/len(y_test)
 
-
+# Log hyperparameters and metrics to a CSV file
 with open(SAVE_PATH + '/iteration_'+str(n_iteration)+'/hyperparameter_morgan_with_freq_v3.csv','a') as ref:
     ref.write(str(mn)+','+str(oss)+','+str(bs)+','+str(lr)+','+str(ba)+','+str(nu)+','+str(df)+','+str(wt)+','+str(cf)+','+str(auc_vl)+','+str(pr_vl)+','+str(Total_left)+','+str(auc_te)+','+str(pr_te)+','+str(re_te)+','+str(Total_left_te)+','+str(pos_ct_orig)+'\n')
 
