@@ -1,3 +1,6 @@
+# Processes model evaluation metrics (precision, recall, AUC, etc.), selects best performing model, and threshold for next iteration
+# Groups models by cutoff values (calculates mean and std for each group)
+
 import builtins as __builtin__
 import argparse
 
@@ -26,21 +29,21 @@ parser.add_argument('-d_path','--data_path',required=True,help='Path to project 
 parser.add_argument('-mdd','--morgan_directory',required=True,help='Path to Morgan fingerprint directory for the database')
 parser.add_argument('-ct', '--recall', required=False, default=0.9, help='Recall, [0,1] range, default value 0.9')
 
-# adding parameter for where to save all the data to:
+# Adding parameter for where to save all the data to:
 parser.add_argument('-s_path', '--save_path', required=False, default=None)
 
 parser.add_argument('-n_mol', '--number_mol', required=False, default=3000000, help='Size of test/validation set to be used')
 
-io_args = parser.parse_args()
-n_iteration = int(io_args.n_iteration)
-mdd = io_args.morgan_directory
-num_molec = int(io_args.number_mol)
-rec = float(io_args.recall)
-protein = str(io_args.data_path).split('/')[-1]
+io_args = parser.parse_args() 
+n_iteration = int(io_args.n_iteration) # Current iteration number 
+mdd = io_args.morgan_directory # Morgan fp directory path
+num_molec = int(io_args.number_mol) # Number molecules 
+rec = float(io_args.recall) # Recall value 
+protein = str(io_args.data_path).split('/')[-1] # Extract protein name from data path
 
 DATA_PATH = io_args.data_path   # Now == file_path/protein
 SAVE_PATH = io_args.save_path
-# if no save path is provided we just save it in the same location as the data
+# If no save path is provided we just save it in the same location as the data
 if SAVE_PATH is None: SAVE_PATH = DATA_PATH
 
 
@@ -49,10 +52,10 @@ print("Done importing.")
 # Gets the total number of molecules (SEE: simple_job_models.py, line 32)
 total_mols = pd.read_csv(mdd+'/Mol_ct_file_%s.csv'%protein,header=None)[[0]].sum()[0]/1000000
 
-# reading in the file created in progressive_docking.py (line 456)
+# Reading in the file created in progressive_docking.py (line 456)
 hyperparameters = pd.read_csv(SAVE_PATH+'/iteration_'+str(n_iteration)+'/hyperparameter_morgan_with_freq_v3.csv',header=None)
  
-# theses are also declared in progressive_docking.py
+# Theses are also declared in progressive_docking.py
 ### TODO: add these columns in progressive_docking.py as a header instead of declaring them here (Line 456)
 hyperparameters.columns = ['Model_no','Over_sampling','Batch_size','Learning_rate','N_layers','N_units','dropout',
                           'weight','cutoff','ROC_AUC','Pr_0_9','tot_left_0_9_mil','auc_te','pr_te','re_te','tot_left_0_9_mil_te','tot_positives']
@@ -61,28 +64,31 @@ hyperparameters.columns = ['Model_no','Over_sampling','Batch_size','Learning_rat
 hyperparameters.tot_left_0_9_mil = hyperparameters.tot_left_0_9_mil/1000000
 hyperparameters.tot_left_0_9_mil_te = hyperparameters.tot_left_0_9_mil_te/1000000   ## What are these? it is never used...
 
-hyperparameters['re_vl/re_pr'] = rec/hyperparameters.re_te  # ratio of desired recall and the recall of the test set
+hyperparameters['re_vl/re_pr'] = rec/hyperparameters.re_te  # Ratio of desired recall and the recall of the test set
 
 print('hyp dataframe:', hyperparameters.head())
 
+# Group hyperparameters by cutoff values
 df_grouped_cf = hyperparameters.groupby('cutoff')  # Groups them according to cutoff values for calculations
 
+# Dictionary to store standard deviations for each cutoff
 cf_values = {}  # Cutoff values (thresholds for validation set virtual hits)
 
 print('Got Hyperparams')
 # Looping through each group and printing mean and std for that particular cuttoff value
 for mini_df in df_grouped_cf:
     print(mini_df[0])   # the cutoff value for the group
-    print(mini_df[1]['re_vl/re_pr'].mean())
-    print(mini_df[1]['re_vl/re_pr'].std())
+    print(mini_df[1]['re_vl/re_pr'].mean()) # Mean of the ratio
+    print(mini_df[1]['re_vl/re_pr'].std()) # Standard deviation of the ratio
     cf_values[mini_df[0]] = mini_df[1]['re_vl/re_pr'].std()
     
 print('cf_values:', cf_values)
 
+# Determine models to use for each cutoff
 model_to_use_with_cf = []   
 ind_pr = []
 for cf in cf_values:
-    models = hyperparameters[hyperparameters.cutoff == cf]  # gets all models matching that cutoff
+    models = hyperparameters[hyperparameters.cutoff == cf]  # Gets all models matching that cutoff
     n_models = len(models)
     thr = rec   # The recall for true positives ### TODO: make this a input for the script
 
@@ -93,6 +99,7 @@ for cf in cf_values:
     models = models[models.re_te >= thr]
     models = models.sort_values('pr_te', ascending=False)   # Sorting in descending order
 
+    # Select top models based on standard deviation
     if cf_values[cf] < 0.01:    # Checks to see if std is less than 0.01
         model_to_use_with_cf.append([cf, models.Model_no[:1].values])
         ind_pr.append([cf, models.pr_te[:1].values])
@@ -101,10 +108,10 @@ for cf in cf_values:
         model_to_use_with_cf.append([cf, models.Model_no[:3].values])
         ind_pr.append([cf, models.pr_te[:3].values])
         
-print(model_to_use_with_cf)  # [ [cf_1, [model_no_1, ...]], [cf_2, [model_no_1, ...]] ... ]
+print(model_to_use_with_cf)  # [ [cf_1, [model_no_1, ...]], [cf_2, [model_no_1, ...]] ... ] # Selected models
 print(ind_pr)  # printed for viewing progress?
 
-
+# Function to extract data from Morgan fingerprint files
 def get_all_x_data(morgan_path, ID_labels): # ID_labels is a dataframe containing the zincIDs and their corresponding labels.
     train_set = np.zeros([num_molec,1024], dtype=bool) # using bool to save space
     train_id = []
@@ -114,7 +121,7 @@ def get_all_x_data(morgan_path, ID_labels): # ID_labels is a dataframe containin
         line_no=0
         for line in ref:            
             mol_info=line.rstrip().split(',')
-            train_id.append(mol_info[0])
+            train_id.append(mol_info[0]) # Extract molecule ID
             
             # "Decompressing" the information from the file about where the 1s are on the 1024 bit vector.
             bit_indicies = mol_info[1:] # array of indexes of the binary 1s in the 1024 bit vector representing the morgan fingerprint
