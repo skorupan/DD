@@ -1,3 +1,5 @@
+# Manages job workflows for a project, including monitoring job progress, modifying job scripts with training parameters, and finalizing iterations by updating evaluation metrics.
+
 import argparse
 import glob
 import time
@@ -24,7 +26,7 @@ def wait_phase_4(project, project_path):
     else:
         print("simple_job created. Starting to check slurm files...") 
 
-    # Then check if all training jobs ahve been submitted (otherwise it will not have some of the out files to check and may terminate it earlier
+    # Then check if all training jobs have been submitted (otherwise it will not have some of the out files to check and may terminate it earlier)
     while not initiated:
         time.sleep(10)
         initiated = True
